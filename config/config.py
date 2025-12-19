@@ -34,6 +34,9 @@ class Config:
     PAYPAL_MODE = os.environ.get('PAYPAL_MODE') or os.environ.get('PAYPAL_ENVIRONMENT', 'sandbox')
     PAYPAL_RETURN_URL = os.environ.get('PAYPAL_RETURN_URL') or 'http://localhost:5000/payment/paypal-return'
     PAYPAL_CANCEL_URL = os.environ.get('PAYPAL_CANCEL_URL') or 'http://localhost:5000/payment/paypal-cancel'
+    
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+    OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-4o-mini')
 config = {
     'development': Config,
     'production': Config,
