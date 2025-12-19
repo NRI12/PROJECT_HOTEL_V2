@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Trang người dùng{% endblock %} - HotelBooking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    {% block extra_styles %}{% endblock %}
+</head>
+<body>
+    {% include "components/header.html" %}
+    <section class="user-dashboard-section py-5">
+        <div class="container">
+            <div class="row">
+                <!-- Sidebar Navigation -->
+                <div class="col-lg-3 col-md-4 mb-4">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush">
+                                <a href="/user/profile" class="list-group-item list-group-item-action {% if request.path == '/user/profile' %}active{% endif %}">
+                                    <i class="bi bi-person me-2"></i> Hồ sơ cá nhân
+                                </a>
+                                <a href="/user/bookings" class="list-group-item list-group-item-action {% if request.path == '/user/bookings' %}active{% endif %}">
+                                    <i class="bi bi-calendar-check me-2"></i> Đặt phòng
+                                </a>
+                                <a href="/user/favorites" class="list-group-item list-group-item-action {% if request.path == '/user/favorites' %}active{% endif %}">
+                                    <i class="bi bi-heart me-2"></i> Yêu thích
+                                </a>
+                                <a href="/user/search-history" class="list-group-item list-group-item-action {% if request.path == '/user/search-history' %}active{% endif %}">
+                                    <i class="bi bi-clock-history me-2"></i> Lịch sử tìm kiếm
+                                </a>
+                                <a href="/user/notifications" class="list-group-item list-group-item-action {% if request.path == '/user/notifications' %}active{% endif %}">
+                                    <i class="bi bi-bell me-2"></i> Thông báo
+                                </a>
+                                <a href="/user/change-password" class="list-group-item list-group-item-action {% if request.path == '/user/change-password' %}active{% endif %}">
+                                    <i class="bi bi-key me-2"></i> Đổi mật khẩu
+                                </a>
+                                <a href="/user/upload-avatar" class="list-group-item list-group-item-action {% if request.path == '/user/upload-avatar' %}active{% endif %}">
+                                    <i class="bi bi-image me-2"></i> Đổi avatar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main Content -->
+                <div class="col-lg-9 col-md-8">
+                    <!-- Page Header -->
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-body">
+                            <h1 class="h3 mb-0">
+                                <i class="bi bi-{% block page_icon %}person{% endblock %} me-2"></i>
+                                {% block page_title %}Trang người dùng{% endblock %}
+                            </h1>
+                        </div>
+                    </div>
+                    
+                    <!-- Flash Messages (using toast) -->
+                    <!-- Alerts are now shown via toast component -->
+                    
+                    <!-- Page Content -->
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {% include "components/footer.html" %}
+    {% include "components/toast.html" %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
+

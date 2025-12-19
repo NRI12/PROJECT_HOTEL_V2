@@ -1,0 +1,303 @@
+{% extends "owner/base.html" %}
+
+{% block title %}Quản lý phòng{% endblock %}
+
+{% block content %}
+
+<div class="owner-header">
+    <div>
+        <h1 class="owner-header-title">
+            Quản lý phòng
+        </h1>
+        <p class="owner-header-subtitle">Quản lý danh sách và trạng thái phòng của khách sạn</p>
+    </div>
+    <div class="owner-header-actions">
+        <a href="{{ url_for('owner.owner_rooms_create') }}" class="owner-btn owner-btn-primary">
+            Thêm phòng mới
+        </a>
+    </div>
+</div>
+
+{% if result[1] == 200 %}
+    {% set rooms = result[0].get_json()['data'] %}
+    
+    <!-- Stats Overview -->
+    {% if rooms %}
+        {% set stats = namespace(total=0, available=0, maintenance=0, occupied=0) %}
+        {% for room in rooms %}
+            {% set stats.total = stats.total + 1 %}
+            {% if room.status == 'available' %}
+                {% set stats.available = stats.available + 1 %}
+            {% elif room.status == 'maintenance' %}
+                {% set stats.maintenance = stats.maintenance + 1 %}
+            {% elif room.status == 'occupied' %}
+                {% set stats.occupied = stats.occupied + 1 %}
+            {% endif %}
+        {% endfor %}
+
+        <div class="owner-stats-row mb-4">
+            <div class="owner-stat-card">
+                <div class="owner-stat-content">
+                    <h6>Tổng số phòng</h6>
+                    <div class="stat-value">{{ stats.total }}</div>
+                    <div class="stat-label">{{ rooms|length }} loại phòng</div>
+                </div>
+                <div class="owner-stat-icon">
+                    
+                </div>
+            </div>
+
+            <div class="owner-stat-card success">
+                <div class="owner-stat-content">
+                    <h6>Phòng có sẵn</h6>
+                    <div class="stat-value">{{ stats.available }}</div>
+                    <div class="stat-label">{{ "%.1f"|format((stats.available / stats.total * 100) if stats.total > 0 else 0) }}%</div>
+                </div>
+                <div class="owner-stat-icon">
+                    
+                </div>
+            </div>
+
+            <div class="owner-stat-card warning">
+                <div class="owner-stat-content">
+                    <h6>Đang bảo trì</h6>
+                    <div class="stat-value">{{ stats.maintenance }}</div>
+                    <div class="stat-label">{{ "%.1f"|format((stats.maintenance / stats.total * 100) if stats.total > 0 else 0) }}%</div>
+                </div>
+                <div class="owner-stat-icon">
+                    
+                </div>
+            </div>
+
+            <div class="owner-stat-card info">
+                <div class="owner-stat-content">
+                    <h6>Đã đặt</h6>
+                    <div class="stat-value">{{ stats.occupied }}</div>
+                    <div class="stat-label">{{ "%.1f"|format((stats.occupied / stats.total * 100) if stats.total > 0 else 0) }}%</div>
+                </div>
+                <div class="owner-stat-icon">
+                    
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Section -->
+        <div class="owner-card mb-3">
+            <form method="GET" action="{{ url_for('owner.owner_rooms') }}" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Lọc theo trạng thái</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="available" {% if request.args.get('status') == 'available' %}selected{% endif %}>
+                            Có sẵn
+                        </option>
+                        <option value="occupied" {% if request.args.get('status') == 'occupied' %}selected{% endif %}>
+                            Đã đặt
+                        </option>
+                        <option value="maintenance" {% if request.args.get('status') == 'maintenance' %}selected{% endif %}>
+                            Bảo trì
+                        </option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Lọc theo khách sạn</label>
+                    <select name="hotel_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">Tất cả khách sạn</option>
+                        {% for room in rooms %}
+                            {% if room.hotel and room.hotel.hotel_id not in (rooms|map(attribute='hotel.hotel_id')|list)[0:loop.index-1] %}
+                                <option value="{{ room.hotel.hotel_id }}" 
+                                    {% if request.args.get('hotel_id')|int == room.hotel.hotel_id %}selected{% endif %}>
+                                    {{ room.hotel.hotel_name }}
+                                </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    {% if request.args.get('status') or request.args.get('hotel_id') %}
+                        <a href="{{ url_for('owner.owner_rooms') }}" class="btn btn-outline-secondary">
+                            Xóa bộ lọc
+                        </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+
+        <!-- Rooms Table -->
+        <div class="owner-table-wrapper">
+            <div class="table-responsive">
+                <table class="owner-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tên phòng</th>
+                            <th>Khách sạn</th>
+                            <th>Loại phòng</th>
+                            <th>Giá/đêm</th>
+                            <th>Sức chứa</th>
+                            <th>Trạng thái</th>
+                            <th class="text-center">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for room in rooms %}
+                        <tr id="room-{{ room.room_id }}">
+                            <td><strong>#{{ room.room_id }}</strong></td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    {% if room.images and room.images|length > 0 %}
+                                        <img src="{{ room.images[0].image_url }}" 
+                                             alt="{{ room.room_name }}" 
+                                             style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; margin-right: 10px;">
+                                    {% else %}
+                                        <div style="width: 50px; height: 50px; background: #f0f0f0; border-radius: 8px; margin-right: 10px; display: flex; align-items: center; justify-content: center;">
+                                            
+                                        </div>
+                                    {% endif %}
+                                    <strong>{{ room.room_name }}</strong>
+                                </div>
+                            </td>
+                            <td>
+                                
+                                {{ room.hotel.hotel_name if room.hotel else 'N/A' }}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">
+                                    {{ room.room_type.type_name if room.room_type else 'N/A' }}
+                                </span>
+                            </td>
+                            <td>
+                                <strong class="text-success">{{ "{:,.0f}".format(room.base_price) }} VNĐ</strong>
+                                {% if room.weekend_price and room.weekend_price != room.base_price %}
+                                    <br><small class="text-muted">Cuối tuần: {{ "{:,.0f}".format(room.weekend_price) }} VNĐ</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {{ room.max_guests }} người
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm status-select" 
+                                        data-room-id="{{ room.room_id }}"
+                                        style="min-width: 130px;">
+                                    <option value="available" {% if room.status == 'available' %}selected{% endif %}>
+                                        Có sẵn
+                                    </option>
+                                    <option value="occupied" {% if room.status == 'occupied' %}selected{% endif %}>
+                                        Đã đặt
+                                    </option>
+                                    <option value="maintenance" {% if room.status == 'maintenance' %}selected{% endif %}>
+                                        Bảo trì
+                                    </option>
+                                </select>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('owner.owner_rooms_edit', room_id=room.room_id) }}" 
+                                       class="btn btn-sm btn-warning text-white" 
+                                       title="Sửa">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <form method="POST" 
+                                          action="{{ url_for('owner.owner_rooms_delete', room_id=room.room_id) }}" 
+                                          style="display:inline;" 
+                                          onsubmit="return confirm('Bạn có chắc muốn xóa phòng này?');">
+                                        <button type="submit" 
+                                                class="btn btn-sm btn-danger" 
+                                                title="Xóa">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    {% else %}
+        <div class="owner-card">
+            <div class="owner-empty-state">
+                <div class="owner-empty-icon">
+                    
+                </div>
+                <h4 class="owner-empty-title">Chưa có phòng nào</h4>
+                <p class="owner-empty-text">Thêm phòng mới để bắt đầu quản lý.</p>
+                <a href="{{ url_for('owner.owner_rooms_create') }}" class="owner-btn owner-btn-primary">
+                    Thêm phòng đầu tiên
+                </a>
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<!-- AJAX Script for Status Update -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const statusSelects = document.querySelectorAll('.status-select');
+    
+    statusSelects.forEach(select => {
+        select.addEventListener('change', function() {
+            const roomId = this.dataset.roomId;
+            const newStatus = this.value;
+            const originalValue = this.querySelector('option[selected]')?.value || this.value;
+            
+            // Show loading
+            this.disabled = true;
+            
+            // Send AJAX request
+            fetch(`/owner/rooms/${roomId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ status: newStatus })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    showToast('Cập nhật trạng thái thành công!', 'success');
+                    // Update the selected attribute
+                    this.querySelectorAll('option').forEach(opt => {
+                        opt.removeAttribute('selected');
+                        if (opt.value === newStatus) {
+                            opt.setAttribute('selected', 'selected');
+                        }
+                    });
+                } else {
+                    // Revert to original value
+                    this.value = originalValue;
+                    showToast(data.message || 'Cập nhật thất bại!', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                this.value = originalValue;
+                showToast('Có lỗi xảy ra!', 'error');
+            })
+            .finally(() => {
+                this.disabled = false;
+            });
+        });
+    });
+    
+    function showToast(message, type) {
+        // Simple toast notification
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+        toast.innerHTML = `${message}`;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.remove();
+        }, 3000);
+    }
+});
+</script>
+
+{% endblock %}
+

@@ -1,0 +1,157 @@
+{% extends "owner/base.html" %}
+
+{% block title %}Dashboard Tổng quan{% endblock %}
+
+{% block content %}
+
+<div class="owner-header">
+    <div>
+        <h1 class="owner-header-title">
+            <i class="fas fa-tachometer-alt me-2"></i> Dashboard Tổng quan
+        </h1>
+        <p class="owner-header-subtitle">Xem tổng quan hoạt động kinh doanh của bạn</p>
+    </div>
+    <div class="owner-header-actions">
+        <span class="text-muted me-3">
+            <i class="far fa-clock"></i> {{ now().strftime('%d/%m/%Y %H:%M') if now else '' }}
+        </span>
+        <form action="{{ url_for('auth.logout') }}" method="POST" style="display: inline;">
+            <button type="submit" class="owner-btn owner-btn-danger">
+                <i class="fas fa-sign-out-alt"></i> Đăng xuất
+            </button>
+        </form>
+    </div>
+</div>
+
+{% set payload = result[0].json if result and result[1] == 200 else None %}
+{% set summary = payload.data.summary if payload and payload.data and payload.data.summary else None %}
+{% set bookings = payload.data.recent_bookings if payload and payload.data and payload.data.recent_bookings else [] %}
+
+<!-- Statistics Cards -->
+{% if summary %}
+    <div class="owner-stats-row">
+        <div class="owner-stat-card">
+            <div class="owner-stat-content">
+                <h6>Tổng khách sạn</h6>
+                <div class="stat-value">{{ summary.hotel_count }}</div>
+                <div class="stat-label">Đang hoạt động</div>
+            </div>
+            <div class="owner-stat-icon">
+                <i class="fas fa-hotel"></i>
+            </div>
+        </div>
+
+        <div class="owner-stat-card success">
+            <div class="owner-stat-content">
+                <h6>Tổng phòng</h6>
+                <div class="stat-value">{{ summary.room_count }}</div>
+                <div class="stat-label">Toàn bộ hệ thống</div>
+            </div>
+            <div class="owner-stat-icon">
+                <i class="fas fa-door-open"></i>
+            </div>
+        </div>
+
+        <div class="owner-stat-card info">
+            <div class="owner-stat-content">
+                <h6>Tổng booking</h6>
+                <div class="stat-value">{{ summary.booking_count }}</div>
+                <div class="stat-label">
+                    {% if summary.pending_booking_count > 0 %}
+                        <span class="badge bg-warning text-dark">{{ summary.pending_booking_count }} chờ xác nhận</span>
+                    {% else %}
+                        Tất cả đơn
+                    {% endif %}
+                </div>
+            </div>
+            <div class="owner-stat-icon">
+                <i class="fas fa-calendar-check"></i>
+            </div>
+        </div>
+
+        <div class="owner-stat-card warning">
+            <div class="owner-stat-content">
+                <h6>Doanh thu</h6>
+                <div class="stat-value">{{ "{:,.0f}".format(summary.total_revenue) }}</div>
+                <div class="stat-label">VNĐ</div>
+            </div>
+            <div class="owner-stat-icon">
+                <i class="fas fa-money-bill-wave"></i>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="owner-alert owner-alert-info">
+        <i class="fas fa-info-circle me-2"></i> Không có dữ liệu thống kê.
+    </div>
+{% endif %}
+
+<!-- Recent Bookings -->
+<div class="owner-table-wrapper">
+    <div class="owner-table-header">
+        <h3 class="owner-table-title">
+            <i class="fas fa-history me-2"></i> Booking gần đây
+        </h3>
+        <a href="{{ url_for('owner.owner_bookings') }}" class="owner-btn owner-btn-primary">
+            <i class="fas fa-eye"></i> Xem tất cả
+        </a>
+    </div>
+    {% if bookings %}
+        <div class="table-responsive">
+            <table class="owner-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Khách sạn</th>
+                        <th>Khách hàng</th>
+                        <th>Check-in</th>
+                        <th>Check-out</th>
+                        <th>Trạng thái</th>
+                        <th class="text-end">Số tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for booking in bookings %}
+                    <tr>
+                        <td><strong>#{{ booking.booking_id }}</strong></td>
+                        <td>
+                            <i class="fas fa-hotel text-primary me-1"></i>
+                            {{ booking.hotel.hotel_name if booking.hotel else 'N/A' }}
+                        </td>
+                        <td>
+                            <i class="fas fa-user text-secondary me-1"></i>
+                            {{ booking.user.full_name if booking.user else 'N/A' }}
+                        </td>
+                        <td>
+                            <i class="far fa-calendar-alt me-1"></i>
+                            {{ booking.check_in_date }}
+                        </td>
+                        <td>
+                            <i class="far fa-calendar-alt me-1"></i>
+                            {{ booking.check_out_date }}
+                        </td>
+                        <td>
+                            <span class="owner-badge status-{{ booking.status }}">
+                                {{ booking.status }}
+                            </span>
+                        </td>
+                        <td class="text-end">
+                            <strong class="text-success">{{ "{:,.0f}".format(booking.final_amount) }} VNĐ</strong>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="owner-empty-state">
+            <div class="owner-empty-icon">
+                <i class="fas fa-inbox"></i>
+            </div>
+            <h4 class="owner-empty-title">Chưa có booking nào</h4>
+            <p class="owner-empty-text">Booking mới sẽ xuất hiện ở đây khi khách hàng đặt phòng.</p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

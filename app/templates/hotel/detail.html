@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if result and result[0].get_json() and result[0].get_json().success %}{{ result[0].get_json().data.hotel.hotel_name }}{% else %}Chi tiết khách sạn{% endif %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    {% set user_logged_in = session.get('user_id') %}
+    {% include "components/header.html" %}
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="container mt-3">
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    {% if result and result[0].get_json() and result[0].get_json().success %}
+        {% set hotel_data = result[0].get_json().data %}
+        {% set hotel = hotel_data.hotel %}
+        {% set rooms = hotel_data.rooms or [] %}
+        {% set reviews = hotel_data.reviews or [] %}
+        {% set eligible_bookings = hotel_data.eligible_bookings or [] %}
+        
+        <div id="hotel-detail-page" data-hotel-id="{{ hotel.hotel_id }}">
+        <!-- HOTEL HEADER -->
+        <section class="hotel-detail-header">
+            <div class="container py-4">
+                <div class="row align-items-start">
+                    <div class="col-lg-8">
+                        <h1 class="hotel-detail-title">{{ hotel.hotel_name }}</h1>
+                        <div class="hotel-detail-meta">
+                            <div class="hotel-rating me-3">
+                                <span class="stars">
+                                    {% for i in range(hotel.star_rating or 4) %}
+                                    <i class="bi bi-star-fill"></i>
+                                    {% endfor %}
+                                </span>
+                                <span class="ms-2">Khách sạn {{ hotel.star_rating or 4 }} sao</span>
+                            </div>
+                            {% if hotel.average_rating %}
+                            <div class="review-badge me-3">
+                                <span class="badge bg-primary">{{ "%.1f"|format(hotel.average_rating) }}/5</span>
+                                <span class="ms-1">({{ hotel.review_count }} đánh giá)</span>
+                            </div>
+                            {% endif %}
+                            <div class="hotel-meta-badges d-flex flex-wrap gap-2 mt-2 mt-lg-0">
+                                {% if hotel.status %}
+                                <span class="badge bg-light text-dark text-uppercase">
+                                    <i class="bi bi-flag"></i> {{ hotel.status.replace('_', ' ') }}
+                                </span>
+                                {% endif %}
+                                {% if hotel.is_featured %}
+                                <span class="badge bg-warning text-dark text-uppercase">
+                                    <i class="bi bi-stars"></i> Nổi bật
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="hotel-address mt-2">
+                            <i class="bi bi-geo-alt-fill text-danger"></i>
+                            <span>{{ hotel.address }}, {% if hotel.ward %}{{ hotel.ward }}, {% endif %}{% if hotel.district %}{{ hotel.district }}, {% endif %}{{ hotel.city }}</span>
+                            {% if hotel.latitude and hotel.longitude %}
+                            <a href="https://www.google.com/maps?q={{ hotel.latitude }},{{ hotel.longitude }}" target="_blank" class="ms-2 text-primary">
+                                <i class="bi bi-map"></i> Xem bản đồ
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-lg-4 mt-3 mt-lg-0 d-flex flex-wrap gap-2 justify-content-lg-end">
+                        <button class="btn btn-outline-primary" type="button" onclick="shareHotel()">
+                            <i class="bi bi-share"></i> Chia sẻ
+                        </button>
+                        <button class="btn btn-outline-danger" type="button" onclick="toggleFavorite(hotelId)">
+                            <i class="bi bi-heart"></i> Yêu thích
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GALLERY -->
+        <section class="hotel-gallery">
+            <div class="container">
+                <div class="gallery-grid">
+                    {% if hotel.images %}
+                        {% for image in hotel.images[:5] %}
+                        <div class="gallery-item {% if loop.index == 1 %}gallery-item-large{% endif %}" data-open-lightbox data-gallery-index="{{ loop.index0 }}">
+                            <img src="{{ image.image_url }}" alt="{{ hotel.hotel_name }}">
+                        </div>
+                        {% endfor %}
+                        {% if hotel.images|length > 5 %}
+                        <button class="gallery-view-all" type="button" data-open-lightbox data-gallery-index="0">
+                            <i class="bi bi-images"></i> Xem tất cả {{ hotel.images|length }} ảnh
+                        </button>
+                        {% endif %}
+                    {% else %}
+                        <div class="gallery-item gallery-item-large">
+                            <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200" alt="{{ hotel.hotel_name }}">
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </section>
+
+        <!-- MAIN CONTENT -->
+        <section class="hotel-content py-4">
+            <div class="container">
+                <div class="row">
+                    <div class="col-12">
+                        <ul class="nav nav-tabs hotel-tabs mb-4" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link active" href="#overview-section">Tổng quan</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" href="#rooms-section">Phòng &amp; giá</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" href="#amenities-section">Tiện nghi</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" href="#reviews-section">Đánh giá</a>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" href="#policies-section">Chính sách</a>
+                            </li>
+                        </ul>
+
+                        <div class="d-flex flex-column gap-4">
+                            <article class="content-card" id="overview-section">
+                                <h3 class="content-title mb-3">Giới thiệu về {{ hotel.hotel_name }}</h3>
+
+                                <div class="row g-4 align-items-start">
+                                    <div class="col-lg-7">
+                                        <div class="row g-3">
+                                            <div class="col-sm-6">
+                                                <div class="info-box">
+                                                    <div>
+                                                        <h6>Nhận phòng</h6>
+                                                        <p class="mb-0">Từ {{ hotel.check_in_time or '14:00' }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-sm-6">
+                                                <div class="info-box">
+                                                    <div>
+                                                        <h6>Trả phòng</h6>
+                                                        <p class="mb-0">Trước {{ hotel.check_out_time or '12:00' }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% if hotel.phone %}
+                                            <div class="col-sm-6">
+                                                <div class="info-box">
+                                                    <div>
+                                                        <h6>Điện thoại</h6>
+                                                        <p class="mb-0">{{ hotel.phone }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            {% if hotel.email %}
+                                            <div class="col-sm-6">
+                                                <div class="info-box">
+                                                    <div>
+                                                        <h6>Email</h6>
+                                                        <p class="mb-0">{{ hotel.email }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="description-panel mt-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="mb-0">Mô tả</h6>
+                                                <span class="text-muted small">Cuộn để xem</span>
+                                            </div>
+                                            <div class="p-3 rounded border bg-light" style="max-height: 260px; overflow-y: auto;">
+                                                {{ hotel.description or 'Chưa có mô tả chi tiết.' }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-5">
+                                        <div class="location-card p-3 rounded border h-100">
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                                <h6 class="mb-0">Vị trí</h6>
+                                                <span class="text-muted small">Bản đồ</span>
+                                            </div>
+                                            <p class="mb-2 small">{{ hotel.address }}, {% if hotel.ward %}{{ hotel.ward }}, {% endif %}{% if hotel.district %}{{ hotel.district }}, {% endif %}{{ hotel.city }}</p>
+                                            {% if hotel.latitude and hotel.longitude %}
+                                            <div class="ratio ratio-4x3 rounded overflow-hidden">
+                                                <iframe
+                                                    src="https://www.google.com/maps?q={{ hotel.latitude }},{{ hotel.longitude }}&output=embed"
+                                                    allowfullscreen
+                                                    loading="lazy">
+                                                </iframe>
+                                            </div>
+                                            {% else %}
+                                            <div class="bg-light rounded p-3 text-center text-secondary">
+                                                Chưa cập nhật
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <article class="content-card" id="rooms-section">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <div>
+                                        <h3 class="content-title mb-1">Phòng &amp; giá</h3>
+                                        <p class="text-secondary mb-0">Danh sách phòng thực tế đang mở bán</p>
+                                    </div>
+                                </div>
+                                <div id="rooms-list">
+                                    {% if rooms %}
+                                    <div class="rooms-list">
+                                        {% for room in rooms %}
+                                        {% set primary_image = room.images[0].image_url if room.images else 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=400' %}
+                                        {% set area_text = room.area and (room.area|string + ' m²') or 'Chưa cập nhật' %}
+                                        {% set guest_text = room.max_guests and (room.max_guests|string + ' khách') or 'Chưa cập nhật' %}
+                                        {% set bed_text = room.num_beds and (room.num_beds|string + ' ' + (room.bed_type or 'giường')) or (room.bed_type or 'Chưa cập nhật') %}
+                                        {% set status_text = room.status and room.status.replace('_', ' ') or 'Đang cập nhật' %}
+                                        {% set status_class = 'bg-success' if room.status == 'available' else ('bg-secondary' if room.status == 'occupied' else 'bg-warning text-dark' if room.status == 'maintenance' else 'bg-light text-dark') %}
+                                        {% set room_type_name = room.room_type.type_name if room.room_type else 'Chưa cập nhật' %}
+                                        {% set weekend_price_text = room.weekend_price and "{:,.0f}".format(room.weekend_price) + '₫' or 'Chưa cập nhật' %}
+                                        {% set updated_text = room.updated_at[:10] if room.updated_at else 'Chưa cập nhật' %}
+                                        {% set description_snippet = room.description if room.description and room.description|length <= 140 else (room.description[:140] ~ '…') if room.description else 'Chưa có mô tả chi tiết.' %}
+                                        {% set base_price_value = room.base_price or 0 %}
+                                        {% set fallback_original = base_price_value and base_price_value * 1.15 %}
+                                        {% set original_price_value = room.weekend_price if room.weekend_price and room.weekend_price > base_price_value else fallback_original %}
+                                        {% set has_discount = original_price_value and base_price_value and original_price_value > base_price_value %}
+                                        {% set availability_text = 'Còn phòng!' if room.status == 'available' else 'Hết phòng' if room.status == 'occupied' else 'Đang bảo trì' %}
+                                        {% set availability_class = 'text-success' if room.status == 'available' else 'text-secondary' %}
+                                        <div class="room-card">
+                                            <div class="room-card-left">
+                                                <div class="room-media">
+                                                    <img src="{{ primary_image }}" class="room-image" alt="{{ room.room_name }}">
+                                                </div>
+                                                <div class="room-specs">
+                                                    <div class="spec-item">
+                                                        <i class="bi bi-aspect-ratio"></i>
+                                                        <span>{{ area_text }}</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <i class="bi bi-people"></i>
+                                                        <span>{{ guest_text }}</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <i class="bi bi-bed"></i>
+                                                        <span>{{ bed_text }}</span>
+                                                    </div>
+                                                    <div class="spec-item">
+                                                        <i class="bi bi-shield-check"></i>
+                                                        <span>{{ status_text }}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="room-feature-grid">
+                                                    {% if room.amenities %}
+                                                        {% for amenity in room.amenities[:6] %}
+                                                        <div class="room-feature">
+                                                            <i class="bi bi-check-circle"></i>
+                                                            <span>{{ amenity.amenity_name }}</span>
+                                                        </div>
+                                                        {% endfor %}
+                                                    {% else %}
+                                                    <span class="text-secondary small">Chưa cập nhật tiện nghi</span>
+                                                    {% endif %}
+                                                </div>
+                                                <span class="room-detail-link">Xem chi tiết phòng</span>
+                                            </div>
+                                            <div class="room-card-right">
+                                                <div class="room-option">
+                                                    <div class="room-option-header">
+                                                        <div>
+                                                            <h5 class="room-option-title">{{ room.room_name }}</h5>
+                                                            <p class="room-option-description mb-0">{{ description_snippet }}</p>
+                                                        </div>
+                                                        <span class="badge {{ status_class }} text-uppercase">{{ status_text }}</span>
+                                                    </div>
+                                                    <ul class="room-option-meta">
+                                                        <li><i class="bi bi-tag"></i> Loại phòng: {{ room_type_name }}</li>
+                                                        <li><i class="bi bi-people"></i> Sức chứa tối đa: {{ guest_text }}</li>
+                                                        <li><i class="bi bi-calendar-week"></i> Giá cuối tuần: {{ weekend_price_text }}</li>
+                                                        <li><i class="bi bi-clock-history"></i> Cập nhật: {{ updated_text }}</li>
+                                                    </ul>
+                                                    <div class="room-price-stack">
+                                                        <div class="price-tag">
+                                                            {% if has_discount %}
+                                                            <span class="flash-sale-badge"><i class="bi bi-lightning-charge-fill"></i> Ưu đãi phút chót!</span>
+                                                            <span class="old-price">{{ "{:,.0f}".format(original_price_value) }}₫</span>
+                                                            {% endif %}
+                                                            <span class="new-price">
+                                                                {% if base_price_value %}
+                                                                    {{ "{:,.0f}".format(base_price_value) }}₫
+                                                                {% else %}
+                                                                    Liên hệ
+                                                                {% endif %}
+                                                            </span>
+                                                            <small>Không bao gồm thuế và phí</small>
+                                                        </div>
+                                                        <div class="room-card-actions">
+                                                            <span class="room-availability {{ availability_class }}">{{ availability_text }}</span>
+                                                            <a href="/booking/create?hotel_id={{ hotel.hotel_id }}&amp;room_id={{ room.room_id }}" class="btn btn-primary">Chọn</a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <p class="text-center text-secondary mb-0">Không có phòng nào khả dụng.</p>
+                                    {% endif %}
+                                </div>
+                            </article>
+
+                            <article class="content-card" id="amenities-section">
+                                <h3 class="content-title">Tiện nghi khách sạn</h3>
+                                {% if hotel.amenities %}
+                                <div class="amenities-grid">
+                                    {% for amenity in hotel.amenities %}
+                                    {% set icon_value = amenity.icon or 'check-circle' %}
+                                    {% if ' ' in icon_value %}
+                                        {% set icon_class = icon_value %}
+                                    {% elif icon_value.startswith('bi-') %}
+                                        {% set icon_class = 'bi ' ~ icon_value %}
+                                    {% else %}
+                                        {% set icon_class = 'bi bi-' ~ icon_value %}
+                                    {% endif %}
+                                    <div class="amenity-item">
+                                        <div class="amenity-icon">
+                                            <i class="{{ icon_class }}"></i>
+                                        </div>
+                                        <div>
+                                            <p class="amenity-name mb-0">{{ amenity.amenity_name }}</p>
+                                            {% if amenity.category %}
+                                            <small class="text-muted text-uppercase">{{ amenity.category }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <p class="text-secondary mb-0">Chưa có thông tin về tiện nghi.</p>
+                                {% endif %}
+                            </article>
+
+                            <article class="content-card" id="reviews-section">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                    <div>
+                                        <h3 class="content-title mb-0">Đánh giá từ khách hàng</h3>
+                                        <p class="text-secondary mb-0">Tổng hợp cảm nhận từ du khách</p>
+                                    </div>
+                                    <a href="{{ url_for('hotel.hotel_reviews', hotel_id=hotel.hotel_id) }}" class="btn btn-outline-primary btn-sm">
+                                        Xem tất cả
+                                    </a>
+                                </div>
+
+                                <div class="review-action-card mb-4">
+                                    {% if user_logged_in %}
+                                    <div class="review-action-header">
+                                        <div>
+                                            <h5 class="mb-1">Đã từng lưu trú tại {{ hotel.hotel_name }}?</h5>
+                                            <p class="mb-0 text-secondary small">Chọn booking đã check-out và chia sẻ trải nghiệm của bạn.</p>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            {% if eligible_bookings %}
+                                            <button class="btn btn-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#write-review-form">
+                                                <i class="bi bi-pencil-square me-1"></i>Viết nhanh
+                                            </button>
+                                            {% endif %}
+                                            <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('review.create_review') }}">
+                                                Mở trang đầy đủ
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    {% if eligible_bookings %}
+                                    <div class="collapse mt-3" id="write-review-form">
+                                        <form method="POST" action="{{ url_for('review.create_review') }}" class="review-inline-form compact">
+                                            <input type="hidden" name="hotel_id" value="{{ hotel.hotel_id }}">
+                                            <div class="row g-3">
+                                                <div class="col-12">
+                                                    <label class="form-label">Chọn booking *</label>
+                                                    <select name="booking_id" class="form-select" required>
+                                                        {% for booking in eligible_bookings %}
+                                                        <option value="{{ booking.booking_id }}">
+                                                            #{{ booking.booking_code }} · {{ booking.check_in or 'N/A' }} → {{ booking.check_out or 'N/A' }}
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                    <div class="form-text">Chỉ hiển thị các booking đã hoàn tất và chưa viết đánh giá.</div>
+                                                </div>
+                                                <div class="col-6 col-sm-4 col-lg-2">
+                                                    <label class="form-label">Điểm tổng *</label>
+                                                    <select name="rating" class="form-select" required>
+                                                        {% for i in range(5, 0, -1) %}
+                                                        <option value="{{ i }}" {% if i == 5 %}selected{% endif %}>{{ i }}/5</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-6 col-sm-4 col-lg-2">
+                                                    <label class="form-label">Vệ sinh</label>
+                                                    <select name="cleanliness_rating" class="form-select">
+                                                        <option value="">-</option>
+                                                        {% for i in range(5, 0, -1) %}
+                                                        <option value="{{ i }}">{{ i }}/5</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-6 col-sm-4 col-lg-2">
+                                                    <label class="form-label">Dịch vụ</label>
+                                                    <select name="service_rating" class="form-select">
+                                                        <option value="">-</option>
+                                                        {% for i in range(5, 0, -1) %}
+                                                        <option value="{{ i }}">{{ i }}/5</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-6 col-sm-4 col-lg-2">
+                                                    <label class="form-label">Tiện nghi</label>
+                                                    <select name="facilities_rating" class="form-select">
+                                                        <option value="">-</option>
+                                                        {% for i in range(5, 0, -1) %}
+                                                        <option value="{{ i }}">{{ i }}/5</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-6 col-sm-4 col-lg-2">
+                                                    <label class="form-label">Vị trí</label>
+                                                    <select name="location_rating" class="form-select">
+                                                        <option value="">-</option>
+                                                        {% for i in range(5, 0, -1) %}
+                                                        <option value="{{ i }}">{{ i }}/5</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label">Cảm nhận</label>
+                                                    <textarea name="comment" class="form-control" rows="2" placeholder="Ngắn gọn nhưng hữu ích nhé!"></textarea>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex justify-content-end gap-2 mt-3">
+                                                <button type="button" class="btn btn-light btn-sm" data-bs-toggle="collapse" data-bs-target="#write-review-form">
+                                                    Đóng
+                                                </button>
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                    Gửi
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-light border mb-0 mt-3 small text-secondary">
+                                        Bạn chưa có booking hoàn tất nào chưa đánh giá tại khách sạn này. Hãy quay lại sau khi chuyến đi kết thúc!
+                                    </div>
+                                    {% endif %}
+                                    {% else %}
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                                        <div>
+                                            <h6 class="mb-1">Đăng nhập để viết đánh giá</h6>
+                                            <p class="mb-0 text-secondary small">Tính năng đánh giá chỉ dành cho khách đã đặt phòng thành công.</p>
+                                        </div>
+                                        <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">
+                                            Đăng nhập ngay
+                                        </a>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if hotel.average_rating %}
+                                <div class="review-summary mb-4 p-4 rounded-3 border" style="background: transparent !important; color: inherit !important;">
+                                    <div class="row g-4">
+                                        <div class="col-md-4 col-lg-3">
+                                            <div class="review-score text-center p-3 bg-white rounded-3 shadow-sm">
+                                                <div class="score-big fw-bold text-primary mb-2" style="font-size: 3rem; line-height: 1;">{{ "%.1f"|format(hotel.average_rating) }}</div>
+                                                <div class="score-stars mb-2">
+                                                    {% for i in range(5) %}
+                                                        {% if i < hotel.average_rating|int %}
+                                                        <i class="bi bi-star-fill text-warning" style="font-size: 1.2rem;"></i>
+                                                        {% else %}
+                                                        <i class="bi bi-star text-warning" style="font-size: 1.2rem;"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                                <p class="mb-0 text-muted small">{{ hotel.review_count }} đánh giá</p>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-8 col-lg-9">
+                                            <h6 class="mb-3 fw-bold">Đánh giá trung bình theo tiêu chí</h6>
+                                            <div class="row g-3">
+                                                {% if hotel.avg_cleanliness_rating %}
+                                                <div class="col-12 col-sm-6">
+                                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                                        <span class="fw-semibold">
+                                                            <i class="bi bi-broom me-2 text-info"></i>Vệ sinh
+                                                        </span>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="stars me-2">
+                                                                {% for i in range(5) %}
+                                                                    {% if i < hotel.avg_cleanliness_rating|int %}
+                                                                    <i class="bi bi-star-fill text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% else %}
+                                                                    <i class="bi bi-star text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
+                                                            <span class="fw-bold text-dark">{{ "%.1f"|format(hotel.avg_cleanliness_rating) }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="progress" style="height: 10px; border-radius: 10px; background-color: #e9ecef;">
+                                                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ (hotel.avg_cleanliness_rating / 5 * 100)|int }}%; border-radius: 10px;"></div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                                {% if hotel.avg_service_rating %}
+                                                <div class="col-12 col-sm-6">
+                                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                                        <span class="fw-semibold">
+                                                            <i class="bi bi-concierge-bell me-2 text-success"></i>Dịch vụ
+                                                        </span>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="stars me-2">
+                                                                {% for i in range(5) %}
+                                                                    {% if i < hotel.avg_service_rating|int %}
+                                                                    <i class="bi bi-star-fill text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% else %}
+                                                                    <i class="bi bi-star text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
+                                                            <span class="fw-bold text-dark">{{ "%.1f"|format(hotel.avg_service_rating) }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="progress" style="height: 10px; border-radius: 10px; background-color: #e9ecef;">
+                                                        <div class="progress-bar bg-success" role="progressbar" style="width: {{ (hotel.avg_service_rating / 5 * 100)|int }}%; border-radius: 10px;"></div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                                {% if hotel.avg_facilities_rating %}
+                                                <div class="col-12 col-sm-6">
+                                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                                        <span class="fw-semibold">
+                                                            <i class="bi bi-water me-2 text-primary"></i>Tiện nghi
+                                                        </span>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="stars me-2">
+                                                                {% for i in range(5) %}
+                                                                    {% if i < hotel.avg_facilities_rating|int %}
+                                                                    <i class="bi bi-star-fill text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% else %}
+                                                                    <i class="bi bi-star text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
+                                                            <span class="fw-bold text-dark">{{ "%.1f"|format(hotel.avg_facilities_rating) }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="progress" style="height: 10px; border-radius: 10px; background-color: #e9ecef;">
+                                                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ (hotel.avg_facilities_rating / 5 * 100)|int }}%; border-radius: 10px;"></div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                                {% if hotel.avg_location_rating %}
+                                                <div class="col-12 col-sm-6">
+                                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                                        <span class="fw-semibold">
+                                                            <i class="bi bi-geo-alt me-2 text-danger"></i>Vị trí
+                                                        </span>
+                                                        <div class="d-flex align-items-center">
+                                                            <div class="stars me-2">
+                                                                {% for i in range(5) %}
+                                                                    {% if i < hotel.avg_location_rating|int %}
+                                                                    <i class="bi bi-star-fill text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% else %}
+                                                                    <i class="bi bi-star text-warning" style="font-size: 0.9rem;"></i>
+                                                                    {% endif %}
+                                                                {% endfor %}
+                                                            </div>
+                                                            <span class="fw-bold text-dark">{{ "%.1f"|format(hotel.avg_location_rating) }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="progress" style="height: 10px; border-radius: 10px; background-color: #e9ecef;">
+                                                        <div class="progress-bar bg-danger" role="progressbar" style="width: {{ (hotel.avg_location_rating / 5 * 100)|int }}%; border-radius: 10px;"></div>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                <div id="reviews-list">
+                                    {% if reviews %}
+                                        {% for review in reviews %}
+                                        <div class="review-item mb-4 pb-4 border-bottom">
+                                            <div class="review-header mb-3">
+                                                <div class="d-flex justify-content-between align-items-start">
+                                                    <div class="d-flex align-items-center">
+                                                        <div class="review-avatar me-3">
+                                                            {% if review.user and review.user.avatar_url %}
+                                                            <img src="{{ review.user.avatar_url }}" alt="Avatar" class="rounded-circle" style="width: 2.5rem; height: 2.5rem; object-fit: cover;">
+                                                            {% else %}
+                                                            <i class="bi bi-person-circle" style="font-size: 2.5rem;"></i>
+                                                            {% endif %}
+                                                        </div>
+                                                        <div>
+                                                            <h6 class="mb-1">
+                                                                {% if review.user and review.user.full_name %}
+                                                                    {{ review.user.full_name }}
+                                                                {% elif review.user and review.user.email %}
+                                                                    {{ review.user.email }}
+                                                                {% elif review.user and review.user.name %}
+                                                                    {{ review.user.name }}
+                                                                {% else %}
+                                                                    Khách hàng
+                                                                {% endif %}
+                                                                {% if review.rooms and review.rooms|length > 0 %}
+                                                                <span class="badge bg-light text-dark border ms-2 small">
+                                                                    <i class="bi bi-door-open me-1"></i>{{ review.rooms[0].room_name }}
+                                                                    {% if review.rooms[0].room_type %}
+                                                                    <span class="text-muted">· {{ review.rooms[0].room_type }}</span>
+                                                                    {% endif %}
+                                                                </span>
+                                                                {% endif %}
+                                                            </h6>
+                                                            <div class="stars mb-1">
+                                                                {% for _ in range(review.rating or 0) %}
+                                                                <i class="bi bi-star-fill text-warning"></i>
+                                                                {% endfor %}
+                                                                {% for _ in range(5 - (review.rating or 0)) %}
+                                                                <i class="bi bi-star text-warning"></i>
+                                                                {% endfor %}
+                                                                <span class="ms-2 text-muted small">{{ review.rating }}/5</span>
+                                                            </div>
+                                                            <small class="text-secondary">
+                                                                <i class="bi bi-calendar3 me-1"></i>{{ review.created_at[:10] if review.created_at else '' }}
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                              
+                                                </div>
+                                            </div>
+
+                                            <!-- Room Information -->
+                                            {% if review.rooms and review.rooms|length > 0 %}
+                                            <div class="mb-3 p-3 bg-light rounded">
+                                                <h6 class="mb-2">
+                                                    <i class="bi bi-door-open me-2"></i>Phòng đã đánh giá:
+                                                </h6>
+                                                <div class="row g-2">
+                                                    {% for room in review.rooms %}
+                                                    <div class="col-md-6">
+                                                        <div class="d-flex align-items-center">
+                                                            <i class="bi bi-box me-2 text-primary"></i>
+                                                            <div>
+                                                                <strong>{{ room.room_name or ('Phòng #' + room.room_id|string) }}</strong>
+                                                                {% if room.room_type %}
+                                                                <span class="badge bg-secondary ms-2">{{ room.room_type }}</span>
+                                                                {% endif %}
+                                                                <div class="small text-muted">
+                                                                    {% if room.area %}
+                                                                    <i class="bi bi-rulers me-1"></i>{{ room.area }}m²
+                                                                    {% endif %}
+                                                                    {% if room.max_guests %}
+                                                                    <i class="bi bi-people me-1 ms-2"></i>{{ room.max_guests }} người
+                                                                    {% endif %}
+                                                                    {% if room.quantity and room.quantity > 1 %}
+                                                                    <span class="ms-2">({{ room.quantity }} phòng)</span>
+                                                                    {% endif %}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Detailed Ratings -->
+                                            {% if review.cleanliness_rating or review.service_rating or review.facilities_rating or review.location_rating %}
+                                            <div class="mb-3">
+                                                <h6 class="mb-2 small text-muted">Đánh giá chi tiết:</h6>
+                                                <div class="row g-2">
+                                                    {% if review.cleanliness_rating %}
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="small">
+                                                                <i class="bi bi-broom me-1 text-info"></i>Vệ sinh
+                                                            </span>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="stars me-1" style="font-size: 0.8rem;">
+                                                                    {% for _ in range(review.cleanliness_rating) %}
+                                                                    <i class="bi bi-star-fill text-warning"></i>
+                                                                    {% endfor %}
+                                                                    {% for _ in range(5 - review.cleanliness_rating) %}
+                                                                    <i class="bi bi-star text-warning"></i>
+                                                                    {% endfor %}
+                                                                </div>
+                                                                <strong class="small">{{ review.cleanliness_rating }}/5</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if review.service_rating %}
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="small">
+                                                                <i class="bi bi-concierge-bell me-1 text-success"></i>Dịch vụ
+                                                            </span>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="stars me-1" style="font-size: 0.8rem;">
+                                                                    {% for _ in range(review.service_rating) %}
+                                                                    <i class="bi bi-star-fill text-warning"></i>
+                                                                    {% endfor %}
+                                                                    {% for _ in range(5 - review.service_rating) %}
+                                                                    <i class="bi bi-star text-warning"></i>
+                                                                    {% endfor %}
+                                                                </div>
+                                                                <strong class="small">{{ review.service_rating }}/5</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if review.facilities_rating %}
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="small">
+                                                                <i class="bi bi-water me-1 text-primary"></i>Tiện nghi
+                                                            </span>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="stars me-1" style="font-size: 0.8rem;">
+                                                                    {% for _ in range(review.facilities_rating) %}
+                                                                    <i class="bi bi-star-fill text-warning"></i>
+                                                                    {% endfor %}
+                                                                    {% for _ in range(5 - review.facilities_rating) %}
+                                                                    <i class="bi bi-star text-warning"></i>
+                                                                    {% endfor %}
+                                                                </div>
+                                                                <strong class="small">{{ review.facilities_rating }}/5</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    {% if review.location_rating %}
+                                                    <div class="col-6 col-md-3">
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <span class="small">
+                                                                <i class="bi bi-geo-alt me-1 text-danger"></i>Vị trí
+                                                            </span>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="stars me-1" style="font-size: 0.8rem;">
+                                                                    {% for _ in range(review.location_rating) %}
+                                                                    <i class="bi bi-star-fill text-warning"></i>
+                                                                    {% endfor %}
+                                                                    {% for _ in range(5 - review.location_rating) %}
+                                                                    <i class="bi bi-star text-warning"></i>
+                                                                    {% endfor %}
+                                                                </div>
+                                                                <strong class="small">{{ review.location_rating }}/5</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% endif %}
+
+                                            <!-- Comment -->
+                                            <div class="review-text">
+                                                <p class="mb-0" style="white-space: pre-wrap;">{{ review.comment or 'Không có nội dung.' }}</p>
+                                            </div>
+
+                                            <!-- Hotel Response -->
+                                            {% if review.hotel_response %}
+                                            <div class="mt-3 p-3 bg-info bg-opacity-10 rounded border-start border-info border-3">
+                                                <div class="d-flex align-items-start">
+                                                    <i class="bi bi-reply-fill text-info me-2 mt-1"></i>
+                                                    <div class="flex-grow-1">
+                                                        <h6 class="mb-1 text-info">Phản hồi từ khách sạn</h6>
+                                                        <p class="mb-1 small" style="white-space: pre-wrap;">{{ review.hotel_response }}</p>
+                                                        {% if review.response_date %}
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-calendar3 me-1"></i>{{ review.response_date[:10] if review.response_date else '' }}
+                                                        </small>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                    <p class="text-center text-secondary mb-0">Chưa có đánh giá nào.</p>
+                                    {% endif %}
+                                </div>
+                            </article>
+
+                            <article class="content-card" id="policies-section">
+                                <h3 class="content-title">Chính sách khách sạn</h3>
+                                
+                                {% if hotel.cancellation_policies %}
+                                <div class="policy-grid">
+                                    {% for policy in hotel.cancellation_policies %}
+                                    <div class="policy-card">
+                                        <div class="policy-card-header">
+                                            <div>
+                                                <h6 class="mb-1">{{ policy.name }}</h6>
+                                                <p class="text-secondary mb-0">{{ policy.description or 'Chưa có mô tả chi tiết.' }}</p>
+                                            </div>
+                                            <span class="badge bg-success-subtle text-success fw-semibold">Hoàn {{ policy.refund_percentage }}%</span>
+                                        </div>
+                                        <ul class="policy-meta">
+                                            <li><i class="bi bi-clock-history"></i>Hủy trước {{ policy.hours_before_checkin }} giờ</li>
+                                            <li><i class="bi bi-shield-check"></i>Hoàn lại {{ policy.refund_percentage }}% giá trị</li>
+                                        </ul>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <p class="text-secondary mb-0">Chưa có chính sách hủy phòng chi tiết.</p>
+                                {% endif %}
+                                
+                                <div class="policy-section mt-4">
+                                    <h5>Chính sách chung</h5>
+                                    <ul class="policy-list">
+                                        <li>Check-in: {{ hotel.check_in_time or '14:00' }} | Check-out: {{ hotel.check_out_time or '12:00' }}</li>
+                                        <li>Xuất trình giấy tờ tùy thân khi nhận phòng</li>
+                                        <li>Không hút thuốc trong phòng</li>
+                                        <li>Không mang thú cưng (trừ khi được thông báo)</li>
+                                    </ul>
+                                </div>
+                            </article>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Lightbox Modal -->
+        <div class="modal fade" id="lightboxModal" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content bg-dark">
+                    <div class="modal-header border-0">
+                        <h5 class="modal-title text-white">{{ hotel.hotel_name }}</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div id="lightboxCarousel" class="carousel slide" data-bs-ride="false">
+                            <div class="carousel-inner">
+                                {% for image in hotel.images %}
+                                <div class="carousel-item {% if loop.index == 1 %}active{% endif %}">
+                                    <img src="{{ image.image_url }}" class="d-block w-100" alt="{{ hotel.hotel_name }}" style="max-height: 80vh; object-fit: contain;">
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <button class="carousel-control-prev" type="button" data-bs-target="#lightboxCarousel" data-bs-slide="prev">
+                                <span class="carousel-control-prev-icon"></span>
+                            </button>
+                            <button class="carousel-control-next" type="button" data-bs-target="#lightboxCarousel" data-bs-slide="next">
+                                <span class="carousel-control-next-icon"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    {% else %}
+        <div class="container my-5">
+            <div class="alert alert-warning text-center">
+                <i class="bi bi-exclamation-triangle fs-1 d-block mb-3"></i>
+                <h4>Không tìm thấy khách sạn</h4>
+                <p>Khách sạn bạn đang tìm không tồn tại hoặc đã bị xóa.</p>
+                <a href="{{ url_for('main.search_page') }}" class="btn btn-primary mt-3">Quay lại trang tìm kiếm</a>
+            </div>
+        </div>
+    {% endif %}
+    {% include "components/footer.html" %}
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script>
+        const hotelDetailRoot = document.getElementById('hotel-detail-page');
+        const hotelId = hotelDetailRoot ? Number(hotelDetailRoot.dataset.hotelId || 0) : 0;
+        
+        document.querySelectorAll('[data-open-lightbox]').forEach(element => {
+            element.addEventListener('click', () => {
+                const index = Number(element.getAttribute('data-gallery-index')) || 0;
+                openLightbox(index);
+            });
+        });
+        
+        function openLightbox(index) {
+            const modal = new bootstrap.Modal(document.getElementById('lightboxModal'));
+            const carousel = bootstrap.Carousel.getOrCreateInstance(document.getElementById('lightboxCarousel'));
+            carousel.to(index);
+            modal.show();
+        }
+        
+        function shareHotel() {
+            if (navigator.share) {
+                navigator.share({
+                    title: document.title,
+                    url: window.location.href
+                }).catch(err => console.log('Error sharing:', err));
+            } else {
+                navigator.clipboard.writeText(window.location.href);
+                alert('Link đã được sao chép!');
+            }
+        }
+        
+        function toggleFavorite(hotelId) {
+            fetch(`/favorite/toggle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ hotel_id: hotelId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Đã cập nhật danh sách yêu thích!');
+                } else {
+                    alert('Vui lòng đăng nhập để sử dụng tính năng này!');
+                    window.location.href = '/auth/login';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Có lỗi xảy ra. Vui lòng thử lại!');
+            });
+        }
+    </script>
+</body>
+</html>

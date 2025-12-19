@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Owner Dashboard{% endblock %} - Quản lý khách sạn</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/owner.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="owner-wrapper">
+        <!-- Sidebar -->
+        <aside class="owner-sidebar">
+            <div class="owner-sidebar-header">
+                <a href="{{ url_for('owner.dashboard') }}" class="owner-sidebar-logo">
+                    <i class="fas fa-hotel"></i> OWNER
+                </a>
+                <div class="owner-sidebar-subtitle">Dashboard Quản lý</div>
+            </div>
+            <nav class="owner-nav">
+                <ul class="list-unstyled">
+                    <!-- Tổng quan -->
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.dashboard') }}" class="owner-nav-link {% if request.endpoint == 'owner.dashboard' %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-tachometer-alt"></i>
+                            Tổng quan
+                        </a>
+                    </li>
+                    
+                    <!-- Quản lý cơ sở -->
+                    <li class="owner-nav-section" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 600; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Quản lý cơ sở
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.my_hotels') }}" class="owner-nav-link {% if request.endpoint == 'owner.my_hotels' %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-building"></i>
+                            Khách sạn
+                        </a>
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.owner_rooms') }}" class="owner-nav-link {% if 'rooms' in request.endpoint %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-bed"></i>
+                            Phòng
+                        </a>
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.owner_amenities') }}" class="owner-nav-link {% if 'amenities' in request.endpoint %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-concierge-bell"></i>
+                            Tiện nghi
+                        </a>
+                    </li>
+                    
+                    <!-- Kinh doanh -->
+                    <li class="owner-nav-section" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 600; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Kinh doanh
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.owner_bookings') }}" class="owner-nav-link {% if 'bookings' in request.endpoint or 'booking' in request.endpoint %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-calendar-check"></i>
+                            Đặt phòng
+                        </a>
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.owner_reviews') }}" class="owner-nav-link {% if request.endpoint == 'owner.owner_reviews' %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-star"></i>
+                            Đánh giá
+                        </a>
+                    </li>
+                    
+                    <!-- Marketing -->
+                    <li class="owner-nav-section" style="margin-top: 1rem; padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 600; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px;">
+                        Marketing
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.owner_promotions') }}" class="owner-nav-link {% if 'promotions' in request.endpoint %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-tags"></i>
+                            Khuyến mại
+                        </a>
+                    </li>
+                    <li class="owner-nav-item">
+                        <a href="{{ url_for('owner.owner_discounts') }}" class="owner-nav-link {% if 'discounts' in request.endpoint %}active{% endif %}">
+                            <i class="owner-nav-icon fas fa-ticket-alt"></i>
+                            Mã giảm giá
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="owner-content">
+            <!-- Page Content -->
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {% include "components/toast.html" %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+

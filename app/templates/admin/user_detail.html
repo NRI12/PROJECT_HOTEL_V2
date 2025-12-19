@@ -1,0 +1,101 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Chi tiết người dùng{% endblock %}
+
+{% block content %}
+
+<div class="owner-header">
+    <div>
+        <h1 class="owner-header-title">
+            <i class="fas fa-user me-2"></i> Chi tiết người dùng
+        </h1>
+    </div>
+    <div class="owner-header-actions">
+        <a href="{{ url_for('admin.admin_users') }}" class="owner-btn owner-btn-outline">
+            <i class="fas fa-arrow-left"></i> Quay lại
+        </a>
+    </div>
+</div>
+
+{% if result[1] == 200 %}
+    {% set user = result[0].get_json()['data']['user'] %}
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="owner-card">
+                <h5 class="mb-3"><i class="fas fa-info-circle me-2"></i> Thông tin cơ bản</h5>
+                <table class="table">
+                    <tr>
+                        <td><strong>ID:</strong></td>
+                        <td>#{{ user.user_id }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Username:</strong></td>
+                        <td>{{ user.username }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Họ tên:</strong></td>
+                        <td>{{ user.full_name or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Email:</strong></td>
+                        <td>{{ user.email }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Số điện thoại:</strong></td>
+                        <td>{{ user.phone or 'N/A' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Ngày tạo:</strong></td>
+                        <td>{{ user.created_at }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="owner-card">
+                <h5 class="mb-3"><i class="fas fa-cog me-2"></i> Quản lý</h5>
+                
+                <!-- Update Role -->
+                <form method="POST" action="{{ url_for('admin.admin_user_role', user_id=user.user_id) }}" class="mb-3">
+                    <label class="form-label">Role</label>
+                    <div class="input-group">
+                        <select name="role_id" class="form-control" required>
+                            <option value="">-- Chọn role --</option>
+                            {% if user.role %}
+                            <option value="{{ user.role.role_id }}" selected>{{ user.role.role_name }} (hiện tại)</option>
+                            {% endif %}
+                        </select>
+                        <button type="submit" class="owner-btn owner-btn-primary">Cập nhật</button>
+                    </div>
+                </form>
+
+                <!-- Update Status -->
+                <form method="POST" action="{{ url_for('admin.admin_user_status', user_id=user.user_id) }}" class="mb-3">
+                    <label class="form-label">Trạng thái</label>
+                    <div class="input-group">
+                        <select name="is_active" class="form-control" required>
+                            <option value="1" {{ 'selected' if user.is_active }}>Active</option>
+                            <option value="0" {{ 'selected' if not user.is_active }}>Inactive</option>
+                        </select>
+                        <button type="submit" class="owner-btn owner-btn-primary">Cập nhật</button>
+                    </div>
+                </form>
+
+                <!-- Delete User -->
+                <form method="POST" action="{{ url_for('admin.admin_user_delete', user_id=user.user_id) }}" 
+                      onsubmit="return confirm('Bạn có chắc muốn xóa người dùng này?');">
+                    <button type="submit" class="owner-btn owner-btn-danger w-100">
+                        <i class="fas fa-trash"></i> Xóa người dùng
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% else %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% endblock %}

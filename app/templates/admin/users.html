@@ -1,0 +1,90 @@
+{% extends "admin/base.html" %}
+{% from "components/pagination.html" import render_pagination %}
+
+{% block title %}Quản lý Người dùng{% endblock %}
+
+{% block content %}
+
+<div class="owner-header">
+    <div>
+        <h1 class="owner-header-title">
+            <i class="fas fa-users me-2"></i> Quản lý Người dùng
+        </h1>
+        <p class="owner-header-subtitle">Danh sách tất cả người dùng trong hệ thống</p>
+    </div>
+    <div class="owner-header-actions">
+        <a href="{{ url_for('admin.admin_users_create') }}" class="owner-btn owner-btn-primary">
+            <i class="fas fa-user-plus"></i> Tạo người dùng mới
+        </a>
+    </div>
+</div>
+
+{% set payload = result[0].json if result and result[1] == 200 else None %}
+{% set users = payload.data.users if payload and payload.data and payload.data.users else [] %}
+{% set pagination = payload.data.pagination if payload and payload.data and payload.data.pagination else None %}
+
+<div class="owner-table-wrapper">
+    <div class="owner-table-header">
+        <h5><i class="fas fa-list me-2"></i> Danh sách người dùng</h5>
+        <span class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+            {% if pagination %}{{ pagination.total }}{% else %}{{ users|length }}{% endif %} người dùng
+        </span>
+    </div>
+    {% if users %}
+        <div class="table-responsive">
+            <table class="owner-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Họ tên</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Trạng thái</th>
+                        <th>Ngày tạo</th>
+                        <th class="text-center">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td><strong>#{{ user.user_id }}</strong></td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.full_name or 'N/A' }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            <span class="badge bg-primary">
+                                {{ user.role.role_name if user.role else 'N/A' }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if user.is_active %}
+                                <span class="owner-badge status-available">Active</span>
+                            {% else %}
+                                <span class="owner-badge status-maintenance">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.created_at }}</td>
+                        <td class="text-center">
+                            <a href="{{ url_for('admin.admin_user_detail', user_id=user.user_id) }}" 
+                               class="owner-btn owner-btn-sm owner-btn-outline-primary">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if pagination %}
+        {{ render_pagination(pagination, 'admin.admin_users') }}
+        {% endif %}
+    {% else %}
+        <div class="owner-empty-state">
+            <div class="owner-empty-icon"><i class="fas fa-users"></i></div>
+            <h4 class="owner-empty-title">Chưa có người dùng</h4>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

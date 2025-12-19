@@ -1,0 +1,55 @@
+{% extends "auth/base_auth.html" %}
+
+{% block title %}Xác thực email{% endblock %}
+
+{% block banner_title %}Xác thực tài khoản{% endblock %}
+{% block banner_subtitle %}Xác thực email để hoàn tất quá trình đăng ký{% endblock %}
+
+{% block heading %}Xác thực email{% endblock %}
+
+{% block form_content %}
+<div class="text-center mb-4">
+    <div class="mb-3">
+        <i class="bi bi-envelope-check text-primary" style="font-size: 3rem;"></i>
+    </div>
+    <p class="text-muted">
+        Vui lòng nhập mã xác thực được gửi đến email của bạn để hoàn tất quá trình đăng ký.
+    </p>
+</div>
+
+<form method="POST" action="/auth/verify-email">
+    <!-- Token Field -->
+    <div class="mb-4">
+        <label for="token" class="form-label">Mã xác thực</label>
+        <div class="input-group">
+            <span class="input-group-text border-end-0">
+                <i class="bi bi-shield-check"></i>
+            </span>
+            <input type="text" class="form-control form-control-lg text-center" id="token" name="token" value="{{ token }}" placeholder="Nhập mã xác thực" required style="letter-spacing: 0.5em; font-family: monospace;">
+        </div>
+        <small class="form-text text-muted">Kiểm tra hộp thư đến hoặc thư spam của bạn</small>
+    </div>
+    
+    <!-- Info Alert -->
+    <div class="alert alert-info" role="alert">
+        <i class="bi bi-info-circle me-2"></i>
+        Mã xác thực có hiệu lực trong 24 giờ. Nếu bạn không nhận được email, vui lòng kiểm tra thư mục spam hoặc <a href="/auth/resend-verification" class="alert-link">gửi lại email xác thực</a>.
+    </div>
+    
+    <!-- Submit Button -->
+    <div class="d-grid">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-check-circle me-2"></i>Xác thực
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block auth_links %}
+<p class="mb-0">
+    <a href="/auth/login"><i class="bi bi-arrow-left me-1"></i>Quay lại đăng nhập</a>
+</p>
+<p class="mt-2 mb-0">
+    Không nhận được email? <a href="/auth/resend-verification">Gửi lại</a>
+</p>
+{% endblock %}

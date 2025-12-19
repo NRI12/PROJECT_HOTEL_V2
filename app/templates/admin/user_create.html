@@ -1,0 +1,116 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Tạo Người dùng Mới{% endblock %}
+
+{% block content %}
+
+<div class="owner-header">
+    <div>
+        <h1 class="owner-header-title">
+            <i class="fas fa-user-plus me-2"></i> Tạo Người dùng Mới
+        </h1>
+        <p class="owner-header-subtitle">Thêm người dùng mới vào hệ thống</p>
+    </div>
+    <div class="owner-header-actions">
+        <a href="{{ url_for('admin.admin_users') }}" class="owner-btn owner-btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Quay lại
+        </a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="owner-card">
+            <h5 class="mb-4"><i class="fas fa-user-plus me-2"></i> Thông tin người dùng</h5>
+            <form method="POST" action="{{ url_for('admin.admin_users_create') }}">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Email *</label>
+                            <input type="email" name="email" class="form-control" placeholder="user@example.com" required>
+                            <small class="form-text text-muted">Email sẽ được sử dụng để đăng nhập</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Mật khẩu *</label>
+                            <input type="password" name="password" class="form-control" placeholder="Mật khẩu mạnh" required>
+                            <small class="form-text text-muted">Tối thiểu 6 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Họ và tên *</label>
+                    <input type="text" name="full_name" class="form-control" placeholder="Nguyễn Văn A" required>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Số điện thoại</label>
+                            <input type="text" name="phone" class="form-control" placeholder="+84xxxxxxxxx hoặc 0xxxxxxxxx">
+                            <small class="form-text text-muted">Định dạng: +84xxxxxxxxx hoặc 0xxxxxxxxx</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">CMND/CCCD</label>
+                            <input type="text" name="id_card" class="form-control" placeholder="Số CMND/CCCD">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Địa chỉ</label>
+                    <textarea name="address" class="form-control" rows="3" placeholder="Địa chỉ..."></textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Role *</label>
+                    <select name="role_id" class="form-control" required>
+                        <option value="">-- Chọn role --</option>
+                        {% for role in roles %}
+                        <option value="{{ role.role_id }}">{{ role.role_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="is_active" value="1" id="is_active" checked>
+                                <label class="form-check-label" for="is_active">
+                                    Kích hoạt tài khoản
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="email_verified" value="1" id="email_verified">
+                                <label class="form-check-label" for="email_verified">
+                                    Email đã xác thực
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="owner-btn owner-btn-primary">
+                        <i class="fas fa-save"></i> Tạo người dùng
+                    </button>
+                    <a href="{{ url_for('admin.admin_users') }}" class="owner-btn owner-btn-outline-secondary">
+                        <i class="fas fa-times"></i> Hủy
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+

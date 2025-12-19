@@ -1,0 +1,94 @@
+{% extends "user/base_user.html" %}
+
+{% block title %}Hồ sơ người dùng{% endblock %}
+{% block page_icon %}person-badge{% endblock %}
+{% block page_title %}Hồ sơ cá nhân{% endblock %}
+
+{% block content %}
+<!-- Profile Form -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">
+                    Cập nhật thông tin
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/user/profile">
+                    <div class="row">
+                        <!-- Full Name -->
+                        <div class="col-md-6 mb-3">
+                            <label for="full_name" class="form-label">
+                                <i class="bi bi-person-fill me-1"></i>
+                                Họ và tên
+                            </label>
+                            <input type="text" class="form-control" id="full_name" name="full_name" 
+                                   value="{{ user.full_name if user and user.full_name else '' }}" 
+                                   placeholder="Nguyễn Văn A">
+                        </div>
+                        
+                        <!-- Phone -->
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">
+                                <i class="bi bi-telephone-fill me-1"></i>
+                                Số điện thoại
+                            </label>
+                            <input type="text" class="form-control" id="phone" name="phone" 
+                                   value="{{ user.phone if user and user.phone else '' }}" 
+                                   placeholder="0123456789">
+                        </div>
+                        
+                        <!-- Address -->
+                        <div class="col-12 mb-3">
+                            <label for="address" class="form-label">
+                                <i class="bi bi-geo-alt-fill me-1"></i>
+                                Địa chỉ
+                            </label>
+                            <input type="text" class="form-control" id="address" name="address" 
+                                   value="{{ user.address if user and user.address else '' }}" 
+                                   placeholder="123 Đường ABC, Quận XYZ, TP. HCM">
+                        </div>
+                        
+                        <!-- ID Card -->
+                        <div class="col-md-6 mb-3">
+                            <label for="id_card" class="form-label">
+                                <i class="bi bi-card-text me-1"></i>
+                                CMND/CCCD
+                            </label>
+                            <input type="text" class="form-control" id="id_card" name="id_card" 
+                                   value="{{ user.id_card if user and user.id_card else '' }}" 
+                                   placeholder="001234567890">
+                        </div>
+                        
+                        <!-- Email (Read-only) -->
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">
+                                <i class="bi bi-envelope-fill me-1"></i>
+                                Email
+                            </label>
+                            <input type="email" class="form-control" id="email" 
+                                   value="{{ user.email if user and user.email else '' }}" 
+                                   readonly disabled>
+                            <small class="form-text text-muted">Email không thể thay đổi</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Info Alert -->
+                    <div class="alert alert-info" role="alert">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Lưu ý:</strong> Vui lòng cung cấp thông tin chính xác để việc đặt phòng được diễn ra thuận lợi.
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            Cập nhật thông tin
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

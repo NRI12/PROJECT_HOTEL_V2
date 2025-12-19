@@ -1,0 +1,101 @@
+{% extends "admin/base.html" %}
+{% from "components/pagination.html" import render_pagination %}
+
+{% block title %}Quản lý Roles{% endblock %}
+
+{% block content %}
+
+<div class="owner-header">
+    <div>
+        <h1 class="owner-header-title">
+            <i class="fas fa-user-tag me-2"></i> Quản lý Roles
+        </h1>
+        <p class="owner-header-subtitle">Quản lý vai trò người dùng trong hệ thống</p>
+    </div>
+</div>
+
+{% set payload = result[0].json if result and result[1] == 200 else None %}
+{% set roles = payload.data.roles if payload and payload.data and payload.data.roles else [] %}
+{% set pagination = payload.data.pagination if payload and payload.data and payload.data.pagination else None %}
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="owner-card">
+            <h5 class="mb-3"><i class="fas fa-plus me-2"></i> Tạo Role mới</h5>
+            <form method="POST" action="{{ url_for('admin.admin_roles_create') }}">
+                <div class="mb-3">
+                    <label class="form-label">Tên Role *</label>
+                    <input type="text" name="role_name" class="form-control" placeholder="VD: moderator" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Mô tả</label>
+                    <textarea name="description" class="form-control" rows="3" placeholder="Mô tả về role..."></textarea>
+                </div>
+                <button type="submit" class="owner-btn owner-btn-primary w-100">
+                    <i class="fas fa-save"></i> Tạo Role
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="owner-table-wrapper">
+            <div class="owner-table-header">
+                <h5><i class="fas fa-list me-2"></i> Danh sách Roles</h5>
+                <span class="badge bg-primary" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                    {% if pagination %}{{ pagination.total }}{% else %}{{ roles|length }}{% endif %} roles
+                </span>
+            </div>
+            {% if roles %}
+                <div class="table-responsive">
+                    <table class="owner-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Tên Role</th>
+                                <th>Mô tả</th>
+                                <th>Ngày tạo</th>
+                                <th class="text-center">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for role in roles %}
+                            <tr>
+                                <td><strong>#{{ role.role_id }}</strong></td>
+                                <td>
+                                    <span class="badge bg-primary">{{ role.role_name }}</span>
+                                </td>
+                                <td>{{ role.description or 'N/A' }}</td>
+                                <td>{{ role.created_at or 'N/A' }}</td>
+                                <td class="text-center">
+                                    {% if role.role_name not in ['admin', 'user', 'hotel_owner'] %}
+                                        <form method="POST" action="{{ url_for('admin.admin_roles_delete', role_id=role.role_id) }}" 
+                                              style="display: inline;" 
+                                              onsubmit="return confirm('Xóa role này?');">
+                                            <button type="submit" class="owner-btn owner-btn-sm owner-btn-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    {% else %}
+                                        <span class="text-muted small">Mặc định</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if pagination %}
+                {{ render_pagination(pagination, 'admin.admin_roles') }}
+                {% endif %}
+            {% else %}
+                <div class="owner-empty-state">
+                    <div class="owner-empty-icon"><i class="fas fa-user-tag"></i></div>
+                    <h4 class="owner-empty-title">Chưa có role</h4>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}
