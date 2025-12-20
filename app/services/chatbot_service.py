@@ -51,8 +51,8 @@ def _get_sql_agent():
             agent_type='openai-functions',
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=5,
-            max_execution_time=30,
+            max_iterations=7,
+            max_execution_time=45,
         )
         
         return agent, db
@@ -64,7 +64,7 @@ def _get_sql_agent():
 
 def _build_enhanced_prompt(message: str, db_info: str) -> str:
     prompt = f"""
-Bạn là trợ lý AI chuyên nghiệp của hệ thống đặt phòng khách sạn HotelBooking.
+Bạn là SQL Expert của hệ thống đặt phòng khách sạn HotelBooking.
 
 🗄️ DATABASE SCHEMA (TỰ ĐỘNG PHÁT HIỆN):
 {db_info}
@@ -90,59 +90,64 @@ Bạn là trợ lý AI chuyên nghiệp của hệ thống đặt phòng khách 
 
 3. VÍ DỤ QUERY PATTERNS:
    
-   a) Tìm phòng theo giá + số người:
-```sql
-   SELECT r.*, h.hotel_name, h.city, h.address
+   📌 Tìm phòng theo giá + số người:
+   SELECT 
+       r.room_id,
+       r.room_name,
+       r.base_price,
+       r.max_guests,
+       r.area,
+       h.hotel_name,
+       h.city,
+       h.address
    FROM rooms r
-   JOIN hotels h ON r.hotel_id = h.hotel_id
-   WHERE r.price_per_night BETWEEN 1000000 AND 3000000
-   AND r.max_occupancy >= 4
-   AND h.status = 'active'
-   ORDER BY r.price_per_night ASC
-   LIMIT 5
-```
+   INNER JOIN hotels h ON r.hotel_id = h.hotel_id
+   WHERE h.status = 'active'
+   AND r.base_price BETWEEN [min_price] AND [max_price]
+   AND r.max_guests >= [num_people]
+   ORDER BY r.base_price ASC
+   LIMIT 5;
    
-   b) Tìm khách sạn theo địa điểm + đánh giá:
-```sql
-   SELECT h.*, AVG(rv.rating) as avg_rating
+   📌 Tìm khách sạn theo địa điểm:
+   SELECT 
+       h.hotel_id,
+       h.hotel_name,
+       h.city,
+       h.star_rating,
+       h.address,
+       COUNT(r.room_id) as room_count
    FROM hotels h
-   LEFT JOIN reviews rv ON h.hotel_id = rv.hotel_id
-   WHERE h.city LIKE '%Đà Nẵng%'
-   AND h.status = 'active'
+   LEFT JOIN rooms r ON h.hotel_id = r.hotel_id
+   WHERE h.status = 'active'
+   AND h.city = '[city_name]'
    GROUP BY h.hotel_id
-   HAVING avg_rating >= 4.0
+   LIMIT 5;
+
+   📌 Top khách sạn theo đánh giá:
+   SELECT 
+       h.hotel_id,
+       h.hotel_name,
+       h.city,
+       AVG(rv.rating) as avg_rating,
+       COUNT(rv.review_id) as review_count
+   FROM hotels h
+   INNER JOIN reviews rv ON h.hotel_id = rv.hotel_id
+   WHERE h.status = 'active'
+   GROUP BY h.hotel_id
+   HAVING review_count >= 3
    ORDER BY avg_rating DESC
-   LIMIT 5
-```
-   
-   c) Tìm khách sạn theo tiện nghi:
-```sql
-   SELECT DISTINCT h.*, GROUP_CONCAT(a.amenity_name) as amenities
-   FROM hotels h
-   JOIN amenities a ON h.hotel_id = a.hotel_id
-   WHERE a.amenity_name IN ('Hồ bơi', 'Gym', 'Spa')
-   AND h.status = 'active'
-   GROUP BY h.hotel_id
-   HAVING COUNT(DISTINCT a.amenity_name) >= 2
-```
+   LIMIT 5;
 
-4. FORMAT KẾT QUẢ:
-   - Trả lời bằng tiếng Việt
-   - Thân thiện, ngắn gọn, dễ hiểu
-   - Liệt kê tối đa 5 kết quả
-   - Hiển thị đầy đủ: tên, địa điểm, giá, thông tin quan trọng
-   - Nếu không tìm thấy → gợi ý lựa chọn thay thế
+🚨 NẾU KHÔNG CHẮC CHẮN:
+- Query đơn giản nhất có thể
+- Ví dụ: chỉ SELECT * FROM hotels WHERE status='active' LIMIT 5
 
-5. XỬ LÝ ĐẶC BIỆT:
-   - "phòng nào", "có phòng" → Query bảng rooms + JOIN hotels
-   - "khách sạn nào" → Query bảng hotels
-   - "đánh giá", "review" → JOIN với bảng reviews
-   - "tiện nghi" → JOIN với bảng amenities
-   - "giá từ X đến Y" → BETWEEN X AND Y
-   - "cho N người" → max_occupancy >= N
-   - "ở [địa điểm]" → city LIKE '%địa_điểm%'
+📤 SAU KHI CÓ KẾT QUẢ:
+- Format bằng tiếng Việt
+- Hiển thị tối đa 5 kết quả
+- Không show SQL query cho user
 
-🚀 BẮT ĐẦU XỬ LÝ!
+BẮT ĐẦU!
 """
     return prompt
 
@@ -179,10 +184,16 @@ def get_chatbot_answer(
         return answer
         
     except TimeoutError:
-        return "Xin lỗi, truy vấn mất quá nhiều thời gian. Vui lòng thử câu hỏi đơn giản hơn."
+        current_app.logger.warning("SQL Agent timeout, using fallback")
+        return _fallback_simple_query(message)
         
     except Exception as e:
-        current_app.logger.error(f"SQL Agent error: {e}", exc_info=True)
+        error_msg = str(e)
+        current_app.logger.error(f"SQL Agent error: {error_msg}", exc_info=True)
+        
+        if "iteration limit" in error_msg.lower() or "time limit" in error_msg.lower() or "max_iterations" in error_msg.lower():
+            current_app.logger.info("Agent hit limit, using fallback")
+            return _fallback_simple_query(message)
         
         return (
             "Xin lỗi, mình gặp lỗi khi xử lý yêu cầu. "
@@ -204,3 +215,48 @@ def _post_process_answer(answer: str, original_message: str) -> str:
             answer += "\n\nBạn có thể thử tìm ở địa điểm khác hoặc điều chỉnh khoảng giá?"
     
     return answer.strip()
+
+
+def _fallback_simple_query(message: str) -> str:
+    from app.models.hotel import Hotel
+    from app.models.room import Room
+    
+    message_lower = message.lower()
+    
+    try:
+        if any(city in message_lower for city in ['đà lạt', 'đà nẵng', 'nha trang', 'hà nội', 'hồ chí minh', 'vũng tàu']):
+            cities = Hotel.query.filter(
+                Hotel.status == 'active'
+            ).with_entities(Hotel.city).distinct().all()
+            
+            cities_list = [c[0] for c in cities if c[0]]
+            if cities_list:
+                return f"Mình có khách sạn ở: {', '.join(cities_list)}. Bạn muốn xem chi tiết địa điểm nào?"
+            else:
+                return "Hiện tại mình chưa có khách sạn ở địa điểm bạn hỏi. Bạn có muốn xem các địa điểm khác không?"
+        
+        elif any(kw in message_lower for kw in ['giá', 'bao nhiêu', 'triệu', 'tr', 'k']):
+            rooms = Room.query.join(Hotel).filter(
+                Hotel.status == 'active'
+            ).order_by(Room.base_price).limit(5).all()
+            
+            if rooms:
+                result = "Một số phòng phù hợp:\n"
+                for r in rooms:
+                    result += f"- {r.room_name} tại {r.hotel.hotel_name}: {int(r.base_price):,}đ/đêm\n"
+                return result
+            else:
+                return "Hiện tại mình chưa có phòng nào. Bạn có thể thử lại sau nhé."
+        
+        else:
+            hotel_count = Hotel.query.filter(Hotel.status == 'active').count()
+            room_count = Room.query.join(Hotel).filter(Hotel.status == 'active').count()
+            
+            return (
+                f"Mình hiện có {hotel_count} khách sạn với {room_count} phòng. "
+                f"Bạn muốn tìm theo địa điểm, giá cả, hay số người ở?"
+            )
+            
+    except Exception as e:
+        current_app.logger.error(f"Fallback query failed: {e}", exc_info=True)
+        return "Xin lỗi, có lỗi xảy ra. Bạn thử lại sau nhé."
