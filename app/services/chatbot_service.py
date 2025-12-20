@@ -2,9 +2,52 @@ from typing import Optional, List, Dict
 from langchain_community.utilities import SQLDatabase
 from langchain_community.agent_toolkits import create_sql_agent
 from langchain_openai import ChatOpenAI
+try:
+    from langchain.agents import create_openai_functions_agent, AgentExecutor
+except ImportError:
+    try:
+        from langchain.agents.openai_functions import create_openai_functions_agent
+        from langchain.agents import AgentExecutor
+    except ImportError:
+        try:
+            from langchain.agents.agent_toolkits import create_openai_functions_agent
+            from langchain.agents import AgentExecutor
+        except ImportError:
+            try:
+                from langchain.agents import AgentExecutor
+                from langchain.agents.openai_functions_agent.base import create_openai_functions_agent
+            except ImportError:
+                create_openai_functions_agent = None
+                AgentExecutor = None
+
+try:
+    from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+except ImportError:
+    try:
+        from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+    except ImportError:
+        ChatPromptTemplate = None
+        MessagesPlaceholder = None
 from flask import current_app
 import os
 import re
+import time
+import hashlib
+from functools import partial
+
+try:
+    from openai import RateLimitError
+except ImportError:
+    RateLimitError = Exception
+
+from app.services.chatbot_cache import get_cached_answer, save_to_cache
+from app.services.chatbot_tools import (
+    search_hotels_and_rooms,
+    get_hotel_reviews,
+    get_current_promotions,
+    check_discount_code,
+    get_my_bookings
+)
 
 
 def _get_sql_database():
@@ -51,8 +94,8 @@ def _get_sql_agent():
             agent_type='openai-functions',
             verbose=True,
             handle_parsing_errors=True,
-            max_iterations=7,
-            max_execution_time=45,
+            max_iterations=3,
+            max_execution_time=15,
         )
         
         return agent, db
@@ -88,9 +131,27 @@ Bạn là SQL Expert của hệ thống đặt phòng khách sạn HotelBooking.
    - Sắp xếp: ORDER BY price_per_night ASC/DESC, rating DESC...
    - Giới hạn: LIMIT 5 (nếu không yêu cầu cụ thể)
 
-3. VÍ DỤ QUERY PATTERNS:
-   
-   📌 Tìm phòng theo giá + số người:
+Tìm phòng theo giá:
+SELECT r.room_name, r.base_price, h.hotel_name, h.city
+FROM rooms r JOIN hotels h ON r.hotel_id = h.hotel_id
+WHERE h.status='active' 
+  AND r.base_price BETWEEN [MIN] AND [MAX]
+LIMIT 5;
+
+Tìm khách sạn theo thành phố:
+SELECT hotel_name, address, star_rating
+FROM hotels
+WHERE status='active' AND city='[CITY]'
+LIMIT 5;
+
+Tìm phòng theo số người:
+SELECT r.room_name, r.base_price, r.max_guests, h.hotel_name
+FROM rooms r JOIN hotels h ON r.hotel_id = h.hotel_id
+WHERE h.status='active' AND r.max_guests >= [NUM_PEOPLE]
+ORDER BY r.base_price ASC
+LIMIT 5;
+
+BẮT ĐẦU TRẢ LỜI:
    SELECT 
        r.room_id,
        r.room_name,
@@ -152,54 +213,228 @@ BẮT ĐẦU!
     return prompt
 
 
+def _retry_with_backoff(func, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except RateLimitError as e:
+            error_msg = str(e)
+            match = re.search(r'try again in ([\d.]+)s', error_msg, re.IGNORECASE)
+            
+            if match:
+                wait_time = float(match.group(1)) + 1
+            else:
+                wait_time = 2 ** attempt
+            
+            if attempt == max_retries - 1:
+                current_app.logger.error(f"Rate limit sau {max_retries} lần")
+                raise
+            
+            current_app.logger.warning(f"Rate limit. Chờ {wait_time:.1f}s...")
+            time.sleep(wait_time)
+        except Exception:
+            raise
+    return None
+
+
+def _invoke_agent_logic(message: str, history: Optional[List[Dict[str, str]]] = None) -> str:
+    agent, db = _get_sql_agent()
+    
+    db_info = db.get_table_info()
+    
+    current_app.logger.info(f"=== AUTO-DETECTED SCHEMA ===\n{db_info}")
+    
+    enhanced_message = _build_enhanced_prompt(message, db_info)
+    
+    if history:
+        context = "\n\n📝 LỊCH SỬ HỘI THOẠI GẦN ĐÂY:\n"
+        for item in history[-3:]:
+            role = "User" if item['role'] == 'user' else "Bot"
+            context += f"{role}: {item['content']}\n"
+        enhanced_message = context + "\n" + enhanced_message
+    
+    current_app.logger.info(f"User query: {message}")
+    response = agent.invoke({"input": enhanced_message})
+    
+    answer = response.get("output", "")
+    
+    if not answer or any(keyword in answer.lower() for keyword in [
+        "iteration limit", "time limit", "stopped due to", 
+        "max iterations", "exceeded", "agent stopped"
+    ]):
+        current_app.logger.warning(f"Agent hit limit, response: {answer}")
+        raise ValueError("Agent stopped due to iteration limit or time limit")
+    
+    answer = _post_process_answer(answer, message)
+    
+    current_app.logger.info(f"Agent response: {answer}")
+    
+    return answer
+
+
+def _call_tool_directly(message: str, user_id: Optional[int] = None) -> Optional[str]:
+    """Gọi tool trực tiếp dựa trên keyword matching"""
+    message_lower = message.lower()
+    
+    if any(kw in message_lower for kw in ['booking', 'đặt phòng', 'lịch sử', 'đã đặt']):
+        if user_id:
+            return get_my_bookings(user_id)
+    
+    if any(kw in message_lower for kw in ['review', 'đánh giá', 'sao', 'rating']):
+        hotel_name = message
+        for city in ['đà lạt', 'đà nẵng', 'nha trang', 'hà nội', 'hồ chí minh', 'vũng tàu']:
+            if city in message_lower:
+                hotel_name = message.replace(city, '').strip()
+                break
+        return get_hotel_reviews(hotel_name)
+    
+    if any(kw in message_lower for kw in ['khuyến mãi', 'giảm giá', 'promotion', 'promo']):
+        city = None
+        for c in ['đà lạt', 'đà nẵng', 'nha trang', 'hà nội', 'hồ chí minh', 'vũng tàu']:
+            if c in message_lower:
+                city = c.title()
+                break
+        return get_current_promotions(city)
+    
+    if any(kw in message_lower for kw in ['mã', 'code', 'discount', 'giảm giá']):
+        words = message.split()
+        for word in words:
+            if len(word) >= 4 and word.isupper():
+                return check_discount_code(word)
+    
+    if any(kw in message_lower for kw in ['tìm', 'phòng', 'khách sạn', 'hotel', 'room']):
+        return search_hotels_and_rooms(message)
+    
+    return None
+
+
 def get_chatbot_answer(
     message: str,
-    history: Optional[List[Dict[str, str]]] = None
+    history: Optional[List[Dict[str, str]]] = None,
+    user_id: Optional[int] = None
 ) -> str:
+    cached = get_cached_answer(message)
+    if cached:
+        current_app.logger.info("Cache hit!")
+        return cached
+    
     try:
-        agent, db = _get_sql_agent()
+        if not create_openai_functions_agent or not AgentExecutor or not ChatPromptTemplate:
+            current_app.logger.warning("Router Agent not available, using direct tool calls")
+            answer = _call_tool_directly(message, user_id)
+            if answer:
+                save_to_cache(message, answer)
+                return answer
+            return _fallback_simple_query(message)
         
-        db_info = db.get_table_info()
+        api_key = current_app.config.get('OPENAI_API_KEY') or os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            return "Xin lỗi, hệ thống chưa được cấu hình đầy đủ."
         
-        current_app.logger.info(f"=== AUTO-DETECTED SCHEMA ===\n{db_info}")
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0,
+            api_key=api_key,
+            request_timeout=20
+        )
         
-        enhanced_message = _build_enhanced_prompt(message, db_info)
+        tools = [
+            search_hotels_and_rooms,
+            get_hotel_reviews,
+            get_current_promotions,
+            check_discount_code
+        ]
         
+        if user_id:
+            get_my_bookings_with_user = partial(get_my_bookings, user_id=user_id)
+            tools.append(get_my_bookings_with_user)
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", """
+Bạn là trợ lý đặt phòng khách sạn thông minh.
+
+Bạn có các công cụ sau:
+1. search_hotels_and_rooms - Tìm phòng/khách sạn
+2. get_hotel_reviews - Xem đánh giá
+3. get_current_promotions - Xem khuyến mãi
+4. check_discount_code - Kiểm tra mã giảm giá
+5. get_my_bookings - Xem booking (chỉ khi user đã login)
+
+NHIỆM VỤ:
+- Phân tích câu hỏi
+- Chọn công cụ phù hợp
+- Trả lời tự nhiên, thân thiện bằng tiếng Việt
+
+VÍ DỤ:
+Q: "Tìm phòng Hà Nội dưới 2 triệu"
+→ Dùng search_hotels_and_rooms
+
+Q: "Khách sạn Sunrise đánh giá thế nào"
+→ Dùng get_hotel_reviews
+
+Q: "Booking của tôi"
+→ Dùng get_my_bookings
+
+Q: "Mã SUMMER500 còn dùng được không"
+→ Dùng check_discount_code
+            """),
+            MessagesPlaceholder("chat_history", optional=True),
+            ("human", "{input}"),
+            MessagesPlaceholder("agent_scratchpad")
+        ])
+        
+        try:
+            agent = create_openai_functions_agent(
+                llm=llm,
+                tools=tools,
+                prompt=prompt
+            )
+            
+            agent_executor = AgentExecutor(
+                agent=agent,
+                tools=tools,
+                verbose=True,
+                max_iterations=3,
+                max_execution_time=20,
+                handle_parsing_errors=True
+            )
+        except Exception as e:
+            current_app.logger.error(f"Error creating Router Agent: {e}", exc_info=True)
+            return _fallback_simple_query(message)
+        
+        chat_history = []
         if history:
-            context = "\n\n📝 LỊCH SỬ HỘI THOẠI GẦN ĐÂY:\n"
-            for item in history[-3:]:
-                role = "User" if item['role'] == 'user' else "Bot"
-                context += f"{role}: {item['content']}\n"
-            enhanced_message = context + "\n" + enhanced_message
+            for item in history[-5:]:
+                if item.get('role') == 'user':
+                    chat_history.append(("human", item.get('content', '')))
+                elif item.get('role') == 'assistant':
+                    chat_history.append(("ai", item.get('content', '')))
         
-        current_app.logger.info(f"User query: {message}")
-        response = agent.invoke({"input": enhanced_message})
+        response = agent_executor.invoke({
+            "input": message,
+            "chat_history": chat_history
+        })
         
         answer = response.get("output", "")
         
-        answer = _post_process_answer(answer, message)
-        
-        current_app.logger.info(f"Agent response: {answer}")
-        
-        return answer
+        if answer:
+            save_to_cache(message, answer)
+            return answer
+        else:
+            return _fallback_simple_query(message)
         
     except TimeoutError:
-        current_app.logger.warning("SQL Agent timeout, using fallback")
+        current_app.logger.warning("Router Agent timeout, using fallback")
         return _fallback_simple_query(message)
+        
+    except RateLimitError:
+        current_app.logger.error("Rate limit exceeded")
+        return "⏱️ Hệ thống đang bận. Vui lòng chờ 10 giây và thử lại."
         
     except Exception as e:
         error_msg = str(e)
-        current_app.logger.error(f"SQL Agent error: {error_msg}", exc_info=True)
-        
-        if "iteration limit" in error_msg.lower() or "time limit" in error_msg.lower() or "max_iterations" in error_msg.lower():
-            current_app.logger.info("Agent hit limit, using fallback")
-            return _fallback_simple_query(message)
-        
-        return (
-            "Xin lỗi, mình gặp lỗi khi xử lý yêu cầu. "
-            "Bạn có thể thử hỏi lại với cách khác được không? "
-            "Ví dụ: 'Tìm phòng ở Đà Lạt giá dưới 2 triệu'"
-        )
+        current_app.logger.error(f"Router Agent error: {error_msg}", exc_info=True)
+        return _fallback_simple_query(message)
 
 
 def _post_process_answer(answer: str, original_message: str) -> str:

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 
 from app.services.chatbot_service import get_chatbot_answer
 
@@ -27,9 +27,11 @@ def chat_message():
         return jsonify({"error": "message is required"}), 400
 
     try:
-        answer = get_chatbot_answer(message, history)
+        user_id = session.get('user_id')
+        
+        answer = get_chatbot_answer(message, history, user_id=user_id)
         return jsonify({"answer": answer})
-    except Exception as exc:  # pragma: no cover - tránh lộ lỗi nhạy cảm
+    except Exception as exc:
         from flask import current_app
 
         current_app.logger.error("Lỗi xử lý chatbot: %s", exc, exc_info=True)
